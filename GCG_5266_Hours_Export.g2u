@@ -1,0 +1,139 @@
+Program.Sub.ScreenSU.Start
+Gui.Form..Create
+Gui.Form..Size(5220,2490)
+Gui.Form..MinX(0)
+Gui.Form..MinY(0)
+Gui.Form..Position(0,0)
+Gui.Form..BackColor(-2147483633)
+Gui.Form..MousePointer(0)
+Gui.Form.dtpStart.Create(DatePicker)
+Gui.Form.dtpStart.Size(1935,285)
+Gui.Form.dtpStart.Position(270,705)
+Gui.Form.dtpEnd.Create(DatePicker)
+Gui.Form.dtpEnd.Size(1935,285)
+Gui.Form.dtpEnd.Position(2505,705)
+Gui.Form.lblStart.Create(Label,"Start Date",True,1935,255,0,300,360,True,0,"Arial",8,-2147483633,0)
+Gui.Form.lblEnd.Create(Label,"End Date",True,1935,255,0,2490,390,True,0,"Arial",8,-2147483633,0)
+Gui.Form.cmdOK.Create(Button)
+Gui.Form.cmdOK.Size(855,375)
+Gui.Form.cmdOK.Position(795,1320)
+Gui.Form.cmdOK.Caption("OK")
+Gui.Form.cmdOK.Event(Click,cmdOK_Click)
+Gui.Form.cmdCancel.Create(Button)
+Gui.Form.cmdCancel.Size(855,375)
+Gui.Form.cmdCancel.Position(2985,1350)
+Gui.Form.cmdCancel.Caption("Cancel")
+Gui.Form.cmdCancel.Event(Click,cmdCancel_Click)
+Program.Sub.ScreenSU.End
+Program.Sub.Preflight.Start
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+F.Intrinsic.Control.Try
+V.Local.sError.Declare
+
+GUI.Form..Show
+
+F.Intrinsic.Control.ExitSub
+
+f.Intrinsic.Control.catch
+f.Intrinsic.Control.CallSub(catching,"sub",v.Ambient.CurrentSubroutine,"errorno",v.Ambient.ErrorNumber,"errordesc",v.Ambient.ErrorDescription)
+f.Intrinsic.Control.EndTry
+Program.Sub.Main.End
+Program.Sub.cmdOK_Click.Start
+F.Intrinsic.Control.Try
+V.Local.sError.Declare
+V.Local.sSql.Declare
+v.Local.sStartDate.Declare
+v.Local.sEndDate.Declare
+V.Local.sFile.Declare
+v.Local.iCount.Declare
+v.Local.fMinutes.Declare
+v.Local.fHours.Declare
+v.Local.bExists.Declare
+v.Local.sStartDate.Set(v.Screen.Form!dtpStart.text)
+v.Local.sEndDate.Set(v.Screen.Form!dtpEnd.text)
+
+f.Intrinsic.UI.InvokeWaitDialog("Retrieving data.....")
+f.Intrinsic.String.Format(v.Local.sStartDate,"YYYY-MM-DD",V.Local.sStartDate)
+F.Intrinsic.String.Format(V.Local.sEndDate,"YYYY-MM-DD",V.Local.sEndDate)
+
+
+F.Intrinsic.String.Build("select H.EMPLOYEE, E.NAME, cast((SUM(H.HOURS_HH) + SUM(H.HOURS_MM )/ 60) as NUMERIC(8,2)) AS HOURS_DEC FROM V_TIME_ATTENDANCE H LEFT JOIN V_EMPLOYEE_MSTR E ON H.EMPLOYEE = E.EMPLOYEE WHERE DATE_IN BETWEEN '{0}' AND '{1}' GROUP BY H.EMPLOYEE, E.NAME ORDER BY H.EMPLOYEE",V.Local.sStartDate,V.Local.sEndDate,V.Local.sSql)
+
+F.ODBC.Connection!COREDB.opencompanyconnection
+f.Data.DataTable.CreateFromSQL("HOURS","COREDB",V.Local.sSql)
+
+f.Data.DataTable.AddColumn("HOURS","WHOLE","STRING")
+F.Data.DataTable.AddColumn("HOURS","MINUTES","STRING")
+
+
+
+F.Intrinsic.Control.For(V.Local.iCount,0,v.DataTable.HOURS.RowCount--,1)
+	f.Intrinsic.String.Right(v.DataTable.HOURS(v.Local.iCount).HOURS_DEC!FIELDVALSTRING,3,V.Local.fMinutes)
+	F.Intrinsic.Control.If(V.Local.fMinutes,>,.001)
+		f.Intrinsic.Math.Sub(v.DataTable.HOURS(v.Local.iCount).HOURS_DEC!FIELDVAL,V.Local.fMinutes,V.Local.fHours)
+		f.Intrinsic.Math.Round(v.Local.fHours,0,v.Local.fHours)
+		f.Intrinsic.Math.Mult(v.Local.fMinutes,60,v.Local.fMinutes)
+		f.Intrinsic.Math.Round(v.Local.fMinutes,0,v.Local.fMinutes)
+		F.Data.DataTable.SetValue("HOURS",V.Local.iCount,"WHOLE",V.Local.fHours,"MINUTES",V.Local.fMinutes)
+	f.Intrinsic.Control.Else
+		f.Intrinsic.Math.Round(v.DataTable.HOURS(v.Local.iCount).HOURS_DEC!FIELDVAL,0,v.Local.fHours)
+		F.Data.DataTable.SetValue("HOURS",V.Local.iCount,"WHOLE",V.Local.fHours,"MINUTES","00")
+	F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.Next(V.Local.iCount)
+
+F.Data.DataTable.AddExpressionColumn("HOURS","TIME","STRING","WHOLE + ':' + MINUTES")
+F.Data.DataView.Create("HOURS","vHOURS",22)
+F.Data.DataView.ToDataTableDistinct("HOURS","vHOURS","TIME","EMPLOYEE*!*NAME*!*TIME")
+
+
+F.Intrinsic.String.Build("{0}\HOURS\",V.Caller.FilesDir,V.Local.sFile)
+F.Intrinsic.File.DirExists(V.Local.sFile,V.Local.bExists)
+f.Intrinsic.Control.If(v.Local.bExists,=,False)
+	f.Intrinsic.File.CreateDir(v.Local.sFile)
+f.Intrinsic.Control.EndIf
+Function.Intrinsic.Debug.InvokeDebugger
+Function.Intrinsic.Debug.Stop
+
+f.Intrinsic.String.Format(v.Local.sStartDate,"YYYYMMDD",V.Local.sStartDate)
+F.Intrinsic.String.Format(V.Local.sEndDate,"YYYYMMDD",V.Local.sEndDate)
+
+F.Intrinsic.String.Build("{0}\{1}-{2}-{3}.csv",v.Local.sFile,V.Caller.User,V.Local.sStartDate,V.Local.sEndDate,V.Local.sFile)
+f.Intrinsic.UI.ChangeWaitStatus("saving to file.....")
+
+F.Data.DataTable.SaveToCSV("TIME",V.Local.sFile,True)
+
+f.Intrinsic.UI.CloseWaitDialog
+
+f.Intrinsic.Control.End
+
+F.Intrinsic.Control.ExitSub
+
+f.Intrinsic.Control.catch
+f.Intrinsic.Control.CallSub(catching,"sub",v.Ambient.CurrentSubroutine,"errorno",v.Ambient.ErrorNumber,"errordesc",v.Ambient.ErrorDescription)
+f.Intrinsic.Control.EndTry
+Program.Sub.cmdOK_Click.End
+Program.Sub.cmdCancel_Click.Start
+F.Intrinsic.Control.Try
+V.Local.sError.Declare
+
+f.Intrinsic.Control.End
+
+F.Intrinsic.Control.ExitSub
+
+f.Intrinsic.Control.catch
+f.Intrinsic.Control.CallSub(catching,"sub",v.Ambient.CurrentSubroutine,"errorno",v.Ambient.ErrorNumber,"errordesc",v.Ambient.ErrorDescription)
+f.Intrinsic.Control.EndTry
+Program.Sub.cmdCancel_Click.End
+
+Program.Sub.catching.Start
+v.Local.sError.declare(string)
+F.Intrinsic.String.Build("Project: {0}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}","GCG_5266_Hours_Export.G2U",V.Ambient.NewLine,v.Args.sub,V.Args.errorno,V.args.errordesc,V.Local.sError)
+f.Intrinsic.UI.Msgbox(v.Local.sError)
+F.Intrinsic.Control.CallSub(cmdCancel_click)
+Program.Sub.catching.End
+
+
+
+
